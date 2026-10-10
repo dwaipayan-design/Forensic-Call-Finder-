@@ -1,0 +1,6 @@
+{
+  "name": "Truecaller Local Caller ID & Status Simulator",
+  "description": "Offline Material 3 Truecaller caller ID simulator with local SQLite shadow database, manual availability toggles, and Flutter code export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
