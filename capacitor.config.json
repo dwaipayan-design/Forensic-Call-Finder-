@@ -1,0 +1,8 @@
+{
+  "appId": "com.dwaipayan.forensiccallfinder",
+  "appName": "Forensic Call Finder",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
