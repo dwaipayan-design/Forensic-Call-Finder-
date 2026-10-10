@@ -31,10 +31,10 @@ jobs:
           java-version: '21'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Install Capacitor
-        run: npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 --no-save --no-package-lock
+        run: npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 --no-save --no-package-lock --legacy-peer-deps
 
       - name: Build web application
         run: npm run build
