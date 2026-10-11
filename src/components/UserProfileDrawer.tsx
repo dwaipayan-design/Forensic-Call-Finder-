@@ -21,6 +21,7 @@ import {
 import { UserProfile } from '../types';
 import { DeviceService, DeviceHardwareTelemetry } from '../lib/deviceService';
 import { LocalSqliteStorage } from '../lib/storage';
+import { NetworkService, NetworkTelemetry } from '../lib/networkService';
 
 interface UserProfileDrawerProps {
   onClose: () => void;
@@ -35,6 +36,7 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
 }) => {
   const [profile, setProfile] = useState<UserProfile>(DeviceService.getUserProfile());
   const [telemetry, setTelemetry] = useState<DeviceHardwareTelemetry>(DeviceService.getRealHardwareTelemetry());
+  const [networkInfo, setNetworkInfo] = useState<NetworkTelemetry | null>(null);
 
   // Editing mode states
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -59,6 +61,10 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
     setEditName(p.name);
     setEditPhone(p.phoneNumber);
     setEditBio(p.bio);
+
+    NetworkService.getNetworkTelemetry().then((net) => {
+      setNetworkInfo(net);
+    });
   }, []);
 
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -295,7 +301,33 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
               </span>
             </div>
             <span className="text-[10px] font-mono text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
-              Active eSIM
+              Active Network
+            </span>
+          </div>
+
+          {/* Real Public WAN IP & ISP */}
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
+            <div>
+              <span className="text-[11px] text-slate-400 block">Public WAN IP & ISP</span>
+              <span className="font-mono font-bold text-slate-900">
+                {networkInfo ? `${networkInfo.publicIp} (${networkInfo.isp})` : 'Resolving network...'}
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-sky-600 bg-sky-50 px-2 py-1 rounded border border-sky-200">
+              {networkInfo?.asn || 'WAN'}
+            </span>
+          </div>
+
+          {/* Local LAN IP */}
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
+            <div>
+              <span className="text-[11px] text-slate-400 block">Local Device Subnet IP</span>
+              <span className="font-mono text-slate-800">
+                {networkInfo?.localIp || '127.0.0.1'}
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-slate-500 bg-white px-2 py-1 rounded border border-slate-200">
+              LAN
             </span>
           </div>
 

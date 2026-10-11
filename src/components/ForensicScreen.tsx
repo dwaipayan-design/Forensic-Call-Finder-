@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { CallLogEntry } from '../types';
 import { DeviceService } from '../lib/deviceService';
+import { NetworkService, NetworkTelemetry } from '../lib/networkService';
 
 interface ForensicScreenProps {
   callLogs: CallLogEntry[];
@@ -39,6 +40,13 @@ export const ForensicScreen: React.FC<ForensicScreenProps> = ({ callLogs, onOpen
 
   const userProfile = DeviceService.getUserProfile();
   const telemetry = DeviceService.getRealHardwareTelemetry();
+  const [networkInfo, setNetworkInfo] = useState<NetworkTelemetry | null>(null);
+
+  useEffect(() => {
+    NetworkService.getNetworkTelemetry().then((info) => {
+      setNetworkInfo(info);
+    });
+  }, []);
 
   // Simulated live baseband frame / packet counter
   useEffect(() => {
@@ -260,15 +268,21 @@ export const ForensicScreen: React.FC<ForensicScreenProps> = ({ callLogs, onOpen
         <div className="mt-2.5 pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-[10.5px] font-mono text-[#8E8E93]">
           <div>
             <span className="text-slate-400 block text-[9px]">STATION NODE</span>
-            <strong className="text-[#1C1C1E]">NODE-ANDR-8821</strong>
+            <strong className="text-[#1C1C1E] truncate block">
+              {networkInfo?.publicIp ? networkInfo.publicIp : `NODE-${telemetry.deviceId.substring(0, 10)}`}
+            </strong>
           </div>
           <div>
-            <span className="text-slate-400 block text-[9px]">CARRIER RAT</span>
-            <strong className="text-[#007AFF]">Jio 5G VoNR</strong>
+            <span className="text-slate-400 block text-[9px]">CARRIER / ISP</span>
+            <strong className="text-[#007AFF] truncate block">
+              {telemetry.carrierName || networkInfo?.isp || 'Cellular HAL'}
+            </strong>
           </div>
           <div>
-            <span className="text-slate-400 block text-[9px]">CHAIN INTEGRITY</span>
-            <strong className="text-[#34C759]">100% Verified</strong>
+            <span className="text-slate-400 block text-[9px]">DEVICE HW</span>
+            <strong className="text-[#34C759] truncate block">
+              {telemetry.hardwareModel.split(' ')[0]} Verified
+            </strong>
           </div>
         </div>
       </div>
@@ -452,7 +466,21 @@ export const ForensicScreen: React.FC<ForensicScreenProps> = ({ callLogs, onOpen
                 </div>
                 <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
                   <span className="text-[#8E8E93]">Device Hardware SIM</span>
-                  <span className="text-[#007AFF]">Slot 0 · Jio 5G VoNR Active</span>
+                  <span className="text-[#007AFF] font-bold">
+                    {telemetry.activeSimSlot} · {telemetry.carrierName}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-[#8E8E93]">Public WAN IP / ISP</span>
+                  <span className="text-[#1C1C1E] font-bold">
+                    {networkInfo ? `${networkInfo.publicIp} (${networkInfo.isp})` : 'Connecting...'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-[#8E8E93]">Local LAN Interface IP</span>
+                  <span className="text-slate-700 font-mono">
+                    {networkInfo ? networkInfo.localIp : '127.0.0.1'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
                   <span className="text-[#8E8E93]">SQLite Log Records Intercepted</span>
@@ -481,8 +509,17 @@ export const ForensicScreen: React.FC<ForensicScreenProps> = ({ callLogs, onOpen
 
               <div className="space-y-2 text-xs font-mono text-slate-700">
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-[#8E8E93]">P-CSCF Proxy Server</span>
-                  <span className="text-[#1C1C1E] font-bold">pcscf.ims.mnc861.mcc405.3gppnetwork.org</span>
+                  <span className="text-[#8E8E93]">P-CSCF Proxy / Gateway</span>
+                  <span className="text-[#1C1C1E] font-bold">
+                    {networkInfo ? `${networkInfo.publicIp} (${networkInfo.asn})` : 'pcscf.ims.mnc861.mcc405.3gppnetwork.org'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-[#8E8E93]">Signaling ISP & Region</span>
+                  <span className="text-[#007AFF] font-bold">
+                    {networkInfo ? `${networkInfo.isp} · ${networkInfo.country}` : 'Carrier Backbone'}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">

@@ -67,6 +67,35 @@ export class LocalSqliteStorage {
     }
   }
 
+  // Clean phone number: strips spaces, dashes, brackets, and periods
+  static cleanPhone(num: string): string {
+    if (!num) return '';
+    return num.replace(/[\s\-\(\)\.]/g, '').trim();
+  }
+
+  // Robust comparison between two phone numbers:
+  // Handles leading zeros, country code prefixes (e.g. +91 vs local 10 digits), and format variations
+  static matchNumbers(numA: string, numB: string): boolean {
+    if (!numA || !numB) return false;
+    const a = this.cleanPhone(numA);
+    const b = this.cleanPhone(numB);
+    if (a === b) return true;
+    const digitsA = a.replace(/\D/g, '');
+    const digitsB = b.replace(/\D/g, '');
+    if (!digitsA || !digitsB) return false;
+    if (digitsA === digitsB) return true;
+    // Check if the last 10 digits match (standard mobile number length in India and North America)
+    if (digitsA.length >= 10 && digitsB.length >= 10) {
+      return digitsA.slice(-10) === digitsB.slice(-10);
+    }
+    return false;
+  }
+
+  // Normalize phone number for consistent map keying
+  static normalizeNumber(num: string): string {
+    return this.cleanPhone(num);
+  }
+
   // Load shadow settings map from local storage (simulating sqflite table 'settings')
   static getSettingsMap(): Record<string, ManualOverride> {
     try {
@@ -84,16 +113,30 @@ export class LocalSqliteStorage {
     }
   }
 
-  // Query a single setting by phone number
+  // Query a single setting by phone number with fuzzy digit parity
   static getSetting(number: string): ManualOverride | undefined {
+    if (!number) return undefined;
     const map = this.getSettingsMap();
-    return map[this.normalizeNumber(number)];
+    const clean = this.normalizeNumber(number);
+    if (map[clean]) return map[clean];
+
+    // Check if any key in map matches the number
+    const matchedKey = Object.keys(map).find((k) => this.matchNumbers(k, number));
+    return matchedKey ? map[matchedKey] : undefined;
   }
 
   // Save / replace a manual override row
   static saveSetting(override: ManualOverride): void {
     const map = this.getSettingsMap();
     const normalized = this.normalizeNumber(override.number);
+
+    // Remove any previous keys that matched the same number under a different formatting
+    Object.keys(map).forEach((k) => {
+      if (k !== normalized && this.matchNumbers(k, normalized)) {
+        delete map[k];
+      }
+    });
+
     map[normalized] = {
       ...override,
       number: normalized,
@@ -124,7 +167,7 @@ export class LocalSqliteStorage {
     const randomMinutes = Math.floor(Math.random() * (15 - 5 + 1)) + 5;
     const expiresAt = Date.now() + randomMinutes * 60 * 1000;
 
-    const existingA = map[normA] || {
+    const existingA = this.getSetting(callerNumber) || {
       number: normA,
       is_busy: false,
       talking_to: '',
@@ -132,7 +175,7 @@ export class LocalSqliteStorage {
       updated_at: Date.now(),
     };
 
-    const existingB = map[normB] || {
+    const existingB = this.getSetting(partnerNumber) || {
       number: normB,
       is_busy: false,
       talking_to: '',
@@ -142,8 +185,8 @@ export class LocalSqliteStorage {
 
     // Fix State Sync / Ghost Call Bug (Requirement 4):
     // 1. Break any pre-existing links for Person A (if A was already in a call with C)
-    if (existingA.talking_to_number && this.normalizeNumber(existingA.talking_to_number) !== normB) {
-      const oldPartnerA = map[this.normalizeNumber(existingA.talking_to_number)];
+    if (existingA.talking_to_number && !this.matchNumbers(existingA.talking_to_number, normB)) {
+      const oldPartnerA = this.getSetting(existingA.talking_to_number);
       if (oldPartnerA) {
         oldPartnerA.is_busy = false;
         oldPartnerA.talking_to = '';
@@ -152,12 +195,13 @@ export class LocalSqliteStorage {
         oldPartnerA.is_custom_caller = false;
         oldPartnerA.busy_expires_at = undefined;
         oldPartnerA.updated_at = Date.now();
+        map[this.normalizeNumber(oldPartnerA.number)] = oldPartnerA;
       }
     }
 
     // 2. Break any pre-existing links for Person B (if B was already in a call with D)
-    if (existingB.talking_to_number && this.normalizeNumber(existingB.talking_to_number) !== normA) {
-      const oldPartnerB = map[this.normalizeNumber(existingB.talking_to_number)];
+    if (existingB.talking_to_number && !this.matchNumbers(existingB.talking_to_number, normA)) {
+      const oldPartnerB = this.getSetting(existingB.talking_to_number);
       if (oldPartnerB) {
         oldPartnerB.is_busy = false;
         oldPartnerB.talking_to = '';
@@ -166,17 +210,18 @@ export class LocalSqliteStorage {
         oldPartnerB.is_custom_caller = false;
         oldPartnerB.busy_expires_at = undefined;
         oldPartnerB.updated_at = Date.now();
+        map[this.normalizeNumber(oldPartnerB.number)] = oldPartnerB;
       }
     }
 
     // 3. Clear any third-party contact in map that pointed to normA or normB
     Object.keys(map).forEach((key) => {
-      if (key !== normA && key !== normB) {
+      if (!this.matchNumbers(key, normA) && !this.matchNumbers(key, normB)) {
         const item = map[key];
         if (
           item.talking_to_number &&
-          (this.normalizeNumber(item.talking_to_number) === normA ||
-            this.normalizeNumber(item.talking_to_number) === normB)
+          (this.matchNumbers(item.talking_to_number, normA) ||
+            this.matchNumbers(item.talking_to_number, normB))
         ) {
           item.is_busy = false;
           item.talking_to = '';
@@ -190,8 +235,8 @@ export class LocalSqliteStorage {
     });
 
     const allContacts = this.getContacts();
-    const contactA = allContacts.find((c) => this.normalizeNumber(c.number) === normA);
-    const contactB = allContacts.find((c) => this.normalizeNumber(c.number) === normB);
+    const contactA = allContacts.find((c) => this.matchNumbers(c.number, normA));
+    const contactB = allContacts.find((c) => this.matchNumbers(c.number, normB));
 
     const avatarA = existingA.avatar_url || contactA?.avatarUrl || undefined;
     const avatarB = existingB.avatar_url || contactB?.avatarUrl || undefined;
@@ -748,10 +793,5 @@ export class LocalSqliteStorage {
         message: `SQLite Error: ${e.message}`,
       };
     }
-  }
-
-  // Normalize phone number for consistent lookup
-  static normalizeNumber(num: string): string {
-    return num.trim();
   }
 }
