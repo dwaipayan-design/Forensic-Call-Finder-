@@ -77,11 +77,11 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
           <div className="absolute -inset-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-3xl blur-xl opacity-30 group-hover:opacity-40 animate-pulse transition duration-1000" />
 
           {/* App Icon Image */}
-          <div className="relative w-28 h-28 rounded-[28px] overflow-hidden shadow-2xl border border-white/40 bg-gradient-to-br from-[#0F2042] via-[#0066EB] to-[#0051C6] flex items-center justify-center">
+          <div className="relative w-28 h-28 flex items-center justify-center">
             <img
               src="/icon.svg"
               alt="Forensic Network Call Finder Icon"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain filter drop-shadow-lg"
             />
           </div>
 

@@ -57,6 +57,7 @@ export interface UserProfile {
   deviceId: string;
   activeSim: string;
   simOperator: string;
+  isConfigured?: boolean;
 }
 
 export interface FlutterCodeFile {

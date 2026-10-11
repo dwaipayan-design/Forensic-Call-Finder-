@@ -1,0 +1,37 @@
+name: truecaller_local_simulator
+description: "A Local-Only Caller ID and Status Simulator with Truecaller UI and SQLite shadow storage."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Device Call Logs Reader
+  call_log: ^4.0.0
+
+  # Local Shadow SQLite Database
+  sqflite: ^2.3.0
+
+  # Filesystem Path Provider for SQLite Database
+  path: ^1.8.3
+
+  # Runtime Permission Handler for Android Phone & Call Log Permissions
+  permission_handler: ^11.0.0
+
+  # Date & Timestamp Formatting
+  intl: ^0.19.0
+
+  # Material Icons
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

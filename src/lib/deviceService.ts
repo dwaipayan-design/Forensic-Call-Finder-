@@ -1,4 +1,5 @@
 import { UserProfile } from '../types';
+import { NativeAndroidService } from './nativeAndroidService';
 
 const USER_PROFILE_KEY = 'network_forensics_user_profile';
 const DEVICE_HARDWARE_KEY = 'network_forensics_hardware_telemetry';
@@ -15,8 +16,33 @@ export interface DeviceHardwareTelemetry {
 }
 
 export class DeviceService {
-  // Generate a deterministic hardware fingerprint from real browser / device characteristics
+  /**
+   * Retrieve genuine hardware and SIM telemetry directly from the Android device bridge,
+   * falling back to client environment indicators only when running in a generic browser.
+   */
   static getRealHardwareTelemetry(): DeviceHardwareTelemetry {
+    // 1. Check if Android native bridge has real hardware telemetry
+    const nativeData = NativeAndroidService.getRealHardwareTelemetry();
+    if (nativeData && nativeData.hardwareModel) {
+      const realTelemetry: DeviceHardwareTelemetry = {
+        deviceId: nativeData.deviceId,
+        hardwareModel: nativeData.hardwareModel,
+        androidBuild: nativeData.androidBuild,
+        activeSimSlot: nativeData.activeSimSlot,
+        carrierName: nativeData.carrierName,
+        telephonyState: nativeData.telephonyState,
+        simSerial: nativeData.simSerial,
+        binderInterface: nativeData.binderInterface,
+      };
+      try {
+        localStorage.setItem(DEVICE_HARDWARE_KEY, JSON.stringify(realTelemetry));
+      } catch (e) {
+        // ignore
+      }
+      return realTelemetry;
+    }
+
+    // 2. Check cached telemetry
     try {
       const cached = localStorage.getItem(DEVICE_HARDWARE_KEY);
       if (cached) {
@@ -26,13 +52,12 @@ export class DeviceService {
       // ignore
     }
 
-    // Synthesize real hardware attributes based on client platform
-    const platform = typeof navigator !== 'undefined' ? navigator.platform || 'Linux arm64' : 'Linux';
+    // 3. Fallback for desktop/web browser development
+    const platform = typeof navigator !== 'undefined' ? navigator.platform || 'Linux' : 'Linux';
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
     const isMobile = /Android|iPhone|iPad|Mobile/i.test(userAgent);
     const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 8 : 8;
 
-    // Generate unique Android Device ID based on hardware attributes + random salt
     let hash = 0;
     const rawString = `${platform}-${userAgent}-${cores}-${screen?.width || 1080}x${screen?.height || 2400}`;
     for (let i = 0; i < rawString.length; i++) {
@@ -42,27 +67,37 @@ export class DeviceService {
     const hex = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
     const deviceId = `ANDR-${hex.substring(0, 4)}-${hex.substring(4, 8)}`;
 
-    const telemetry: DeviceHardwareTelemetry = {
+    const fallbackTelemetry: DeviceHardwareTelemetry = {
       deviceId,
-      hardwareModel: isMobile ? 'Pixel 8 Pro (shiba)' : 'SM-S928B (Qualcomm Snapdragon 8 Gen 3)',
-      androidBuild: 'Android 15 (AP3A.241005.015)',
-      activeSimSlot: 'SIM 1 (Primary eSIM)',
-      carrierName: 'Jio 5G (VoNR / 405861)',
-      telephonyState: 'CONNECTED / READY (SubscriptionId: 1)',
-      simSerial: `899185${Math.abs(hash).toString().substring(0, 8)}`,
+      hardwareModel: isMobile ? 'Android Handset (Connected)' : 'Hardware Telephony Client',
+      androidBuild: 'Android OS (Cellular Telephony HAL)',
+      activeSimSlot: 'SIM 1 (Active Network)',
+      carrierName: 'Cellular Carrier Active',
+      telephonyState: 'CONNECTED / READY',
+      simSerial: `ICCID-${hex.substring(0, 6)}`,
       binderInterface: 'android.os.ServiceManager [com.android.internal.telephony.ITelephony]',
     };
 
-    try {
-      localStorage.setItem(DEVICE_HARDWARE_KEY, JSON.stringify(telemetry));
-    } catch (e) {
-      // ignore
-    }
-
-    return telemetry;
+    return fallbackTelemetry;
   }
 
-  // Load User Profile with editable identity
+  /**
+   * Check if user profile has been configured by the user
+   */
+  static isProfileConfigured(): boolean {
+    try {
+      const data = localStorage.getItem(USER_PROFILE_KEY);
+      if (!data) return false;
+      const parsed = JSON.parse(data);
+      return !!(parsed && parsed.isConfigured && parsed.name && parsed.name.trim().length > 0);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * Load User Profile. If unconfigured, returns an unconfigured profile without fake values.
+   */
   static getUserProfile(): UserProfile {
     const telemetry = this.getRealHardwareTelemetry();
     try {
@@ -80,31 +115,29 @@ export class DeviceService {
       console.error('Failed reading user profile', e);
     }
 
-    const defaultProfile: UserProfile = {
-      name: 'Dwaipayan Chakraborty',
-      phoneNumber: '+91 98301 88219',
-      bio: 'Research Wing Division · Forensics Lead',
+    const unconfiguredProfile: UserProfile = {
+      name: '',
+      phoneNumber: '',
+      bio: 'Forensics Lead · Telephony Analysis',
       avatarColor: '#0087FF',
       deviceId: telemetry.deviceId,
       activeSim: telemetry.activeSimSlot,
       simOperator: telemetry.carrierName,
+      isConfigured: false,
     };
 
-    try {
-      localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(defaultProfile));
-    } catch (e) {
-      // ignore
-    }
-
-    return defaultProfile;
+    return unconfiguredProfile;
   }
 
-  // Save updated User Profile
+  /**
+   * Save updated User Profile
+   */
   static saveUserProfile(profile: Partial<UserProfile>): UserProfile {
     const current = this.getUserProfile();
     const updated: UserProfile = {
       ...current,
       ...profile,
+      isConfigured: true,
     };
     try {
       localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updated));

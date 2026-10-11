@@ -18,10 +18,14 @@ import { OsintScreen } from './components/OsintScreen';
 import { ForensicScreen } from './components/ForensicScreen';
 import { UserProfileDrawer } from './components/UserProfileDrawer';
 import { SplashScreen } from './components/SplashScreen';
+import { OnboardingModal } from './components/OnboardingModal';
+import { DeviceService } from './lib/deviceService';
 import { NativeAndroidService, PermissionStatus } from './lib/nativeAndroidService';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [userProfile, setUserProfile] = useState(() => DeviceService.getUserProfile());
   const [activeTab, setActiveTab] = useState<ActiveTab>('calls');
   const [searchQuery, setSearchQuery] = useState('');
   const [callLogs, setCallLogs] = useState<CallLogEntry[]>([]);
@@ -45,6 +49,7 @@ export default function App() {
     setCallLogs(LocalSqliteStorage.getCallLogs());
     setShadowOverrides(LocalSqliteStorage.getSettingsMap());
     setContacts(LocalSqliteStorage.getContacts());
+    setUserProfile(DeviceService.getUserProfile());
   };
 
   // Trigger sync with native Android providers
@@ -307,6 +312,7 @@ export default function App() {
             onOpenUserProfile={() => setShowUserProfileDrawer(true)}
             isSyncing={isSyncing}
             onSync={triggerDeviceSync}
+            userInitials={userProfile.name ? userProfile.name.trim().charAt(0).toUpperCase() : 'U'}
           />
         )}
 
@@ -320,10 +326,6 @@ export default function App() {
             onClose={() => setShowUserProfileDrawer(false)}
             onOpenAddLog={() => setShowNewLogModal(true)}
             onRefreshData={refreshData}
-            onReplaySplash={() => {
-              setShowUserProfileDrawer(false);
-              setShowSplash(true);
-            }}
           />
         )}
 
@@ -356,8 +358,13 @@ export default function App() {
         {/* New Call Log Injection Modal (Unlocked only with 3329) */}
         {showNewLogModal && (
           <NewCallLogModal
+            contacts={contacts}
+            defaultSim={DeviceService.getRealHardwareTelemetry().activeSimSlot}
             onClose={() => setShowNewLogModal(false)}
-            onAdded={refreshData}
+            onAdded={() => {
+              refreshData();
+              triggerDeviceSync();
+            }}
           />
         )}
       </main>
@@ -371,7 +378,28 @@ export default function App() {
 
       {/* Full-Screen Native Boot Splash Screen */}
       {showSplash && (
-        <SplashScreen onComplete={() => setShowSplash(false)} />
+        <SplashScreen
+          onComplete={() => {
+            setShowSplash(false);
+            // Prompt permissions immediately after splash screen
+            handleRequestPermissions();
+            // Check if profile needs first-time onboarding
+            if (!DeviceService.isProfileConfigured()) {
+              setShowOnboarding(true);
+            }
+          }}
+        />
+      )}
+
+      {/* First-Time User Profile Setup Onboarding */}
+      {showOnboarding && !showSplash && (
+        <OnboardingModal
+          detectedCarrier={DeviceService.getRealHardwareTelemetry().carrierName}
+          onComplete={() => {
+            setShowOnboarding(false);
+            refreshData();
+          }}
+        />
       )}
     </div>
   );

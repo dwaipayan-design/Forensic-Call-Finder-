@@ -360,8 +360,9 @@ export class LocalSqliteStorage {
       const logsRaw = localStorage.getItem(LOGS_KEY);
       if (logsRaw) {
         const logs: CallLogEntry[] = JSON.parse(logsRaw);
+        const legacyMockIds = new Set(['log-1', 'log-2', 'log-3', 'log-4', 'log-5', 'log-6', 'log-7', 'log-8']);
         const filteredLogs = logs.filter(
-          (l) => !l.id?.startsWith('log-') && !l.number?.includes('555 0192') && !l.number?.includes('555 8391')
+          (l) => !legacyMockIds.has(l.id) && !l.number?.includes('555 0192') && !l.number?.includes('555 8391')
         );
         if (filteredLogs.length !== logs.length) {
           localStorage.setItem(LOGS_KEY, JSON.stringify(filteredLogs));
@@ -371,8 +372,9 @@ export class LocalSqliteStorage {
       const contactsRaw = localStorage.getItem(CONTACTS_KEY);
       if (contactsRaw) {
         const contacts: ContactItem[] = JSON.parse(contactsRaw);
+        const legacyContactIds = new Set(['c-1', 'c-2', 'c-3', 'c-4', 'c-5', 'c-6', 'c-7', 'c-8']);
         const filteredContacts = contacts.filter(
-          (c) => !c.id?.startsWith('c-') && !c.number?.includes('555 0192') && !c.number?.includes('555 8391')
+          (c) => !legacyContactIds.has(c.id) && !c.number?.includes('555 0192') && !c.number?.includes('555 8391')
         );
         if (filteredContacts.length !== contacts.length) {
           localStorage.setItem(CONTACTS_KEY, JSON.stringify(filteredContacts));
@@ -605,8 +607,16 @@ export class LocalSqliteStorage {
 
   // Synchronize both device contacts and call logs
   static syncDeviceData(contacts: ContactItem[], logs: CallLogEntry[]): void {
+    // Retain any user-injected calls so entries added by the user are never wiped during device sync
+    const currentLogs = this.getCallLogs();
+    const userInjected = currentLogs.filter((l) => l.id.startsWith('user-injected-'));
+    const incomingIds = new Set(logs.map((l) => l.id));
+    const mergedInjected = userInjected.filter((l) => !incomingIds.has(l.id));
+    const finalLogs = [...mergedInjected, ...logs];
+    finalLogs.sort((a, b) => b.timestamp - a.timestamp);
+
     localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
-    localStorage.setItem(LOGS_KEY, JSON.stringify(logs));
+    localStorage.setItem(LOGS_KEY, JSON.stringify(finalLogs));
     this.notify();
   }
 
@@ -626,14 +636,16 @@ export class LocalSqliteStorage {
     }
   }
 
-  // Add a new call log entry (simulating a fresh incoming/outgoing call)
+  // Add a new call log entry (simulating a fresh incoming/outgoing call or user injected record)
   static addCallLog(entry: Omit<CallLogEntry, 'id'>): CallLogEntry {
     const logs = this.getCallLogs();
     const newEntry: CallLogEntry = {
       ...entry,
-      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: `user-injected-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     };
     const updated = [newEntry, ...logs];
+    // Keep sorted by timestamp descending
+    updated.sort((a, b) => b.timestamp - a.timestamp);
     localStorage.setItem(LOGS_KEY, JSON.stringify(updated));
     this.notify();
     return newEntry;

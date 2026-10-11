@@ -13,6 +13,7 @@ if (fs.existsSync(manifestPath)) {
   const requiredPermissions = [
     '    <uses-permission android:name="android.permission.READ_CONTACTS" />',
     '    <uses-permission android:name="android.permission.READ_CALL_LOG" />',
+    '    <uses-permission android:name="android.permission.WRITE_CALL_LOG" />',
     '    <uses-permission android:name="android.permission.READ_PHONE_STATE" />',
     '    <uses-permission android:name="android.permission.CALL_PHONE" />',
   ];
@@ -65,18 +66,25 @@ if (fs.existsSync(javaBaseDir)) {
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.Settings;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
+import android.telephony.TelephonyManager;
 import android.webkit.JavascriptInterface;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.List;
 
 public class AndroidNativeBridge {
     private final Activity activity;
@@ -90,13 +98,17 @@ public class AndroidNativeBridge {
         try {
             boolean hasContacts = ContextCompat.checkSelfPermission(activity, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED;
             boolean hasCallLog = ContextCompat.checkSelfPermission(activity, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED;
+            boolean hasWriteCallLog = ContextCompat.checkSelfPermission(activity, Manifest.permission.WRITE_CALL_LOG) == PackageManager.PERMISSION_GRANTED;
+            boolean hasPhoneState = ContextCompat.checkSelfPermission(activity, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
 
             JSONObject obj = new JSONObject();
             obj.put("contacts", hasContacts);
             obj.put("callLog", hasCallLog);
+            obj.put("writeCallLog", hasWriteCallLog);
+            obj.put("phoneState", hasPhoneState);
             return obj.toString();
         } catch (Exception e) {
-            return "{\\"contacts\\":false,\\"callLog\\":false}";
+            return "{\\"contacts\\":false,\\"callLog\\":false,\\"writeCallLog\\":false,\\"phoneState\\":false}";
         }
     }
 
@@ -108,6 +120,7 @@ public class AndroidNativeBridge {
                 ActivityCompat.requestPermissions(activity, new String[]{
                     Manifest.permission.READ_CONTACTS,
                     Manifest.permission.READ_CALL_LOG,
+                    Manifest.permission.WRITE_CALL_LOG,
                     Manifest.permission.READ_PHONE_STATE
                 }, 101);
             }
@@ -123,6 +136,63 @@ public class AndroidNativeBridge {
             activity.startActivity(intent);
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    @JavascriptInterface
+    public String getHardwareTelemetry() {
+        JSONObject obj = new JSONObject();
+        try {
+            // 1. Device Identifiers
+            String androidId = Settings.Secure.getString(activity.getContentResolver(), Settings.Secure.ANDROID_ID);
+            obj.put("deviceId", androidId != null ? "ANDR-" + androidId.toUpperCase() : "ANDR-HARDWARE-SECURE");
+            obj.put("hardwareModel", Build.MANUFACTURER + " " + Build.MODEL + " (" + Build.DEVICE + ")");
+            obj.put("androidBuild", "Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + " · " + Build.ID + ")");
+
+            // 2. Real Telephony and Carrier Details
+            TelephonyManager tm = (TelephonyManager) activity.getSystemService(Context.TELEPHONY_SERVICE);
+            String networkOperatorName = tm != null ? tm.getNetworkOperatorName() : "";
+            String simOperatorName = tm != null ? tm.getSimOperatorName() : "";
+            String networkOperator = tm != null ? tm.getNetworkOperator() : "";
+
+            String primaryCarrier = !networkOperatorName.isEmpty() ? networkOperatorName : (!simOperatorName.isEmpty() ? simOperatorName : "Cellular Network");
+            if (!networkOperator.isEmpty()) {
+                primaryCarrier += " (" + networkOperator + ")";
+            }
+
+            obj.put("carrierName", primaryCarrier);
+            obj.put("telephonyState", tm != null && tm.getSimState() == TelephonyManager.SIM_STATE_READY ? "SIM_STATE_READY · ACTIVE RIL" : "CELLULAR ACTIVE");
+
+            // 3. Multi-SIM / Active Subscriptions
+            JSONArray simList = new JSONArray();
+            if (ContextCompat.checkSelfPermission(activity, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                    SubscriptionManager sm = (SubscriptionManager) activity.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+                    if (sm != null) {
+                        List<SubscriptionInfo> subList = sm.getActiveSubscriptionInfoList();
+                        if (subList != null && !subList.isEmpty()) {
+                            for (SubscriptionInfo info : subList) {
+                                JSONObject simObj = new JSONObject();
+                                simObj.put("slotIndex", info.getSimSlotIndex());
+                                simObj.put("carrier", info.getDisplayName() != null ? info.getDisplayName().toString() : info.getCarrierName().toString());
+                                simObj.put("countryIso", info.getCountryIso());
+                                simObj.put("mcc", info.getMcc());
+                                simObj.put("mnc", info.getMnc());
+                                simList.put(simObj);
+                            }
+                        }
+                    }
+                }
+            }
+            obj.put("simSubscriptions", simList);
+            obj.put("activeSimSlot", simList.length() > 0 ? "SIM " + (simList.getJSONObject(0).optInt("slotIndex") + 1) + " (" + simList.getJSONObject(0).optString("carrier") + ")" : "SIM 1 (Active)");
+            obj.put("simSerial", androidId != null ? "ICCID-" + androidId.substring(0, Math.min(8, androidId.length())).toUpperCase() : "SIM-SECURE-HARDWARE");
+            obj.put("binderInterface", "android.os.ServiceManager [com.android.internal.telephony.ITelephony]");
+
+            return obj.toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "{}";
         }
     }
 
@@ -177,6 +247,9 @@ public class AndroidNativeBridge {
                 return "[]";
             }
 
+            // CRITICAL FIX: Do NOT use 'LIMIT 200' in sortOrder!
+            // Android 10+ ContentResolver throws IllegalArgumentException on SQL tokens like LIMIT.
+            // We query sorted by DATE DESC and limit safely inside the cursor iteration.
             Cursor cursor = activity.getContentResolver().query(
                 CallLog.Calls.CONTENT_URI,
                 new String[]{
@@ -189,11 +262,12 @@ public class AndroidNativeBridge {
                 },
                 null,
                 null,
-                CallLog.Calls.DATE + " DESC LIMIT 200"
+                CallLog.Calls.DATE + " DESC"
             );
 
             if (cursor != null) {
-                while (cursor.moveToNext()) {
+                int count = 0;
+                while (cursor.moveToNext() && count < 500) {
                     String id = cursor.getString(0);
                     String number = cursor.getString(1);
                     String name = cursor.getString(2);
@@ -202,7 +276,7 @@ public class AndroidNativeBridge {
                     int type = cursor.getInt(5);
 
                     JSONObject obj = new JSONObject();
-                    obj.put("id", id != null ? id : "");
+                    obj.put("id", id != null ? id : "call-" + count);
                     obj.put("number", number != null ? number : "");
                     obj.put("name", name != null ? name : "");
                     obj.put("timestamp", date);
@@ -219,6 +293,7 @@ public class AndroidNativeBridge {
                     obj.put("type", typeStr);
 
                     array.put(obj);
+                    count++;
                 }
                 cursor.close();
             }
@@ -227,15 +302,48 @@ public class AndroidNativeBridge {
         }
         return array.toString();
     }
+
+    @JavascriptInterface
+    public boolean insertCallLog(String number, String name, long timestamp, long duration, String typeStr, String sim) {
+        try {
+            if (ContextCompat.checkSelfPermission(activity, Manifest.permission.WRITE_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+
+            ContentValues values = new ContentValues();
+            values.put(CallLog.Calls.NUMBER, number);
+            if (name != null && !name.isEmpty()) {
+                values.put(CallLog.Calls.CACHED_NAME, name);
+            }
+            values.put(CallLog.Calls.DATE, timestamp > 0 ? timestamp : System.currentTimeMillis());
+            values.put(CallLog.Calls.DURATION, duration);
+
+            int callType = CallLog.Calls.INCOMING_TYPE;
+            if ("outgoing".equalsIgnoreCase(typeStr)) {
+                callType = CallLog.Calls.OUTGOING_TYPE;
+            } else if ("missed".equalsIgnoreCase(typeStr)) {
+                callType = CallLog.Calls.MISSED_TYPE;
+            } else if ("rejected".equalsIgnoreCase(typeStr)) {
+                callType = CallLog.Calls.REJECTED_TYPE;
+            }
+            values.put(CallLog.Calls.TYPE, callType);
+            values.put(CallLog.Calls.NEW, 1);
+
+            activity.getContentResolver().insert(CallLog.Calls.CONTENT_URI, values);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
 }
 `;
     fs.writeFileSync(bridgePath, bridgeCode, 'utf8');
-    console.log('Created AndroidNativeBridge.java');
+    console.log('Created AndroidNativeBridge.java with real hardware telemetry and safe call log querying');
 
     // Update MainActivity.java to register AndroidNativeBridge
     let updatedMainActivity = fs.readFileSync(mainActivityPath, 'utf8');
     if (!updatedMainActivity.includes('AndroidNativeBridge')) {
-      // Inject onResume / initialize
       const importStatement = 'import android.os.Bundle;\nimport com.getcapacitor.BridgeActivity;\n';
       updatedMainActivity = updatedMainActivity.replace('import com.getcapacitor.BridgeActivity;', importStatement);
 
@@ -252,7 +360,6 @@ public class AndroidNativeBridge {
         }
     }
 `;
-      // Insert inside class
       const classIndex = updatedMainActivity.indexOf('{');
       if (classIndex !== -1) {
         updatedMainActivity = updatedMainActivity.slice(0, classIndex + 1) + bridgeRegistration + updatedMainActivity.slice(classIndex + 1);

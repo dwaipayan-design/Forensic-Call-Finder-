@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK (Flutter & Native Capacitor)
 
 on:
   push:
@@ -10,8 +10,48 @@ permissions:
   contents: read
 
 jobs:
-  build-apk:
-    name: Build Forensic Call Finder APK
+  # Job 1: Build Standalone Flutter Android APK with SQLite & Native Call Log
+  build-flutter-apk:
+    name: Build Flutter Release APK (SQLite & Call Log)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Get Flutter dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+
+      - name: Build Flutter Release APK
+        working-directory: flutter_app
+        run: flutter build apk --release
+
+      - name: Upload Flutter Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forensic-call-finder-flutter-release-apk
+          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+  # Job 2: Build Native Android Telephony APK (Capacitor & AndroidNativeBridge)
+  build-native-apk:
+    name: Build Native Android APK (Edge-to-Edge Bridge)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -55,7 +95,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: forensic-call-finder-debug-apk
+          name: forensic-call-finder-native-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

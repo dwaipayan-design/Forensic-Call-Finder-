@@ -4,6 +4,8 @@ import { LocalSqliteStorage } from './storage';
 export interface PermissionStatus {
   contacts: 'granted' | 'denied' | 'prompt';
   callLog: 'granted' | 'denied' | 'prompt';
+  writeCallLog?: 'granted' | 'denied' | 'prompt';
+  phoneState?: 'granted' | 'denied' | 'prompt';
 }
 
 export interface SyncResult {
@@ -12,6 +14,24 @@ export interface SyncResult {
   callLogsCount: number;
   error?: string;
   isNative: boolean;
+}
+
+export interface RealHardwareTelemetryData {
+  deviceId: string;
+  hardwareModel: string;
+  androidBuild: string;
+  carrierName: string;
+  telephonyState: string;
+  activeSimSlot: string;
+  simSerial: string;
+  binderInterface: string;
+  simSubscriptions?: Array<{
+    slotIndex: number;
+    carrier: string;
+    countryIso?: string;
+    mcc?: number;
+    mnc?: number;
+  }>;
 }
 
 // Generate consistent avatar colors for contacts
@@ -76,6 +96,8 @@ export class NativeAndroidService {
         return {
           contacts: parsed.contacts ? 'granted' : 'denied',
           callLog: parsed.callLog ? 'granted' : 'denied',
+          writeCallLog: parsed.writeCallLog ? 'granted' : 'denied',
+          phoneState: parsed.phoneState ? 'granted' : 'denied',
         };
       } catch (e) {
         console.warn('Bridge checkPermissions error:', e);
@@ -110,20 +132,16 @@ export class NativeAndroidService {
   }
 
   /**
-   * Request native runtime permissions for READ_CONTACTS and READ_CALL_LOG
+   * Request native runtime permissions for READ_CONTACTS, READ_CALL_LOG, WRITE_CALL_LOG, and READ_PHONE_STATE
    */
   static async requestPermissions(): Promise<PermissionStatus> {
     const bridge = (window as any).AndroidBridge || (window as any).AndroidNative;
     if (bridge && typeof bridge.requestPermissions === 'function') {
       try {
-        const res = bridge.requestPermissions();
-        const parsed = typeof res === 'string' ? JSON.parse(res) : res;
-        const status: PermissionStatus = {
-          contacts: parsed.contacts ? 'granted' : 'denied',
-          callLog: parsed.callLog ? 'granted' : 'denied',
-        };
-        localStorage.setItem('android_permissions_state', JSON.stringify(status));
-        return status;
+        bridge.requestPermissions();
+        // Wait briefly for user to interact with the Android permission dialog
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        return await this.checkPermissions();
       } catch (e) {
         console.warn('Failed bridge requestPermissions:', e);
       }
@@ -155,6 +173,25 @@ export class NativeAndroidService {
   }
 
   /**
+   * Fetch real hardware, device identity, and carrier SIM telemetry from Android
+   */
+  static getRealHardwareTelemetry(): RealHardwareTelemetryData | null {
+    const bridge = (window as any).AndroidBridge || (window as any).AndroidNative;
+    if (bridge && typeof bridge.getHardwareTelemetry === 'function') {
+      try {
+        const raw = bridge.getHardwareTelemetry();
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (parsed && parsed.hardwareModel) {
+          return parsed as RealHardwareTelemetryData;
+        }
+      } catch (e) {
+        console.error('Failed querying hardware telemetry from bridge:', e);
+      }
+    }
+    return null;
+  }
+
+  /**
    * Fetch genuine Contacts from Android Contacts Provider (ContactsContract)
    */
   static async fetchContacts(): Promise<ContactItem[]> {
@@ -163,7 +200,7 @@ export class NativeAndroidService {
       try {
         const raw = bridge.getContacts();
         const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((item: any, idx: number) => ({
             id: item.id || `contact-${idx}-${Date.now()}`,
             name: item.name || item.displayName || 'Unknown Contact',
@@ -183,7 +220,7 @@ export class NativeAndroidService {
     if (cap?.Plugins?.Contacts?.getContacts) {
       try {
         const res = await cap.Plugins.Contacts.getContacts({ projection: { name: true, phones: true } });
-        if (res?.contacts) {
+        if (res?.contacts && res.contacts.length > 0) {
           return res.contacts.map((c: any, idx: number) => {
             const phone = c.phones?.[0]?.number || '';
             const displayName = c.name?.display || c.name?.given || phone || 'Unknown';
@@ -219,7 +256,7 @@ export class NativeAndroidService {
             contactMap.set(LocalSqliteStorage.normalizeNumber(c.number), c.name);
           });
 
-          return parsed.map((log: any, idx: number) => {
+          const nativeLogs: CallLogEntry[] = parsed.map((log: any, idx: number) => {
             const normNumber = LocalSqliteStorage.normalizeNumber(log.number || '');
             const resolvedName = log.name || contactMap.get(normNumber) || null;
 
@@ -242,9 +279,18 @@ export class NativeAndroidService {
               timestamp: Number(log.date || log.timestamp || Date.now()),
               duration: Number(log.duration || 0),
               type: logType,
-              sim: log.sim || (log.subscriptionId === 1 ? 'SIM 2' : 'SIM 1 (Primary)'),
+              sim: log.sim || (log.subscriptionId === 1 ? 'SIM 2' : 'SIM 1 (Active)'),
             };
           });
+
+          // Merge with any custom user-injected calls from local storage
+          const localStored = LocalSqliteStorage.getCallLogs();
+          const userInjected = localStored.filter((l) => l.id.startsWith('user-injected-'));
+
+          const combined = [...userInjected, ...nativeLogs];
+          // Sort descending by timestamp
+          combined.sort((a, b) => b.timestamp - a.timestamp);
+          return combined;
         }
       } catch (e) {
         console.error('Failed reading call logs from native Android bridge:', e);
@@ -253,6 +299,48 @@ export class NativeAndroidService {
 
     // In web preview or empty device: return local SQLite storage
     return LocalSqliteStorage.getCallLogs();
+  }
+
+  /**
+   * Insert a mock or custom call into Android system call logs and local storage
+   */
+  static async insertCallLog(entry: {
+    number: string;
+    name?: string | null;
+    timestamp: number;
+    duration: number;
+    type: 'incoming' | 'outgoing' | 'missed' | 'rejected';
+    sim?: string;
+  }): Promise<boolean> {
+    // 1. If running on native Android, attempt writing directly to Android ContentProvider
+    const bridge = (window as any).AndroidBridge || (window as any).AndroidNative;
+    if (bridge && typeof bridge.insertCallLog === 'function') {
+      try {
+        const success = bridge.insertCallLog(
+          entry.number,
+          entry.name || '',
+          entry.timestamp,
+          entry.duration,
+          entry.type,
+          entry.sim || 'SIM 1'
+        );
+        console.info('Native call log insertion result:', success);
+      } catch (e) {
+        console.warn('Native bridge insertCallLog failed:', e);
+      }
+    }
+
+    // 2. Save into local SQLite storage with user-injected flag
+    LocalSqliteStorage.addCallLog({
+      number: entry.number,
+      name: entry.name || null,
+      timestamp: entry.timestamp,
+      duration: entry.duration,
+      type: entry.type,
+      sim: entry.sim || 'SIM 1 (Active)',
+    });
+
+    return true;
   }
 
   /**

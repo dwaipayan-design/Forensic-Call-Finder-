@@ -23,6 +23,7 @@ import {
   Binary
 } from 'lucide-react';
 import { CallLogEntry } from '../types';
+import { DeviceService } from '../lib/deviceService';
 
 interface ForensicScreenProps {
   callLogs: CallLogEntry[];
@@ -35,6 +36,9 @@ export const ForensicScreen: React.FC<ForensicScreenProps> = ({ callLogs, onOpen
   const [activeTab, setActiveTab] = useState<'telemetry' | 'signaling' | 'audit'>('telemetry');
   const [isExporting, setIsExporting] = useState(false);
   const [exportCompleteToast, setExportCompleteToast] = useState(false);
+
+  const userProfile = DeviceService.getUserProfile();
+  const telemetry = DeviceService.getRealHardwareTelemetry();
 
   // Simulated live baseband frame / packet counter
   useEffect(() => {
@@ -135,19 +139,22 @@ export const ForensicScreen: React.FC<ForensicScreenProps> = ({ callLogs, onOpen
           standard: 'ISO/IEC 27037:2012 Digital Evidence Handling Guidelines',
           nistFramework: 'NIST SP 800-86 Guide to Integrating Forensic Techniques',
           system: 'Forensic Network Call Finder',
-          investigator: 'Dwaipayan Chakraborty',
-          division: 'Project supported by Research Wing Division',
-          investigationStation: 'STATION-DC-RW-8821',
+          investigator: userProfile.name || 'Authorized Forensic Analyst',
+          division: 'Cellular Forensic Telephony Subsystem',
+          investigationStation: `STATION-${telemetry.deviceId.replace('ANDR-', '')}`,
           exportedAt: new Date().toISOString(),
           auditStatus: 'CRYPTOGRAPHICALLY_VERIFIED_PARITY_OK',
           integrityChecksumSha256: realSha256Digest,
         },
         deviceHardwareProfile: {
-          model: 'Android 15 (ARM64-v8a)',
-          basebandHAL: 'Qualcomm Snapdragon X75 5G RIL v16.2',
+          model: telemetry.hardwareModel,
+          androidBuild: telemetry.androidBuild,
+          basebandHAL: telemetry.binderInterface,
           activeSubscription: {
-            simSlot: 0,
-            carrier: 'Reliance Jio Infocomm Ltd.',
+            simSlot: telemetry.activeSimSlot,
+            carrier: telemetry.carrierName,
+            simSerial: telemetry.simSerial,
+            telephonyState: telemetry.telephonyState,
             plmn: '405-861',
             mcc: '405',
             mnc: '861',
@@ -239,7 +246,7 @@ export const ForensicScreen: React.FC<ForensicScreenProps> = ({ callLogs, onOpen
               Lead Architect & Investigator:
             </span>
             <span className="font-bold text-[#007AFF] bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 text-[11px]">
-              Dwaipayan Chakraborty
+              {userProfile.name || 'Authorized Investigator'}
             </span>
           </div>
 
@@ -579,7 +586,7 @@ export const ForensicScreen: React.FC<ForensicScreenProps> = ({ callLogs, onOpen
                   </div>
                   <div className="flex items-center justify-between text-slate-700">
                     <span>4. Investigator Authentication:</span>
-                    <span className="text-[#1C1C1E] font-bold">Dwaipayan Chakraborty (L4)</span>
+                    <span className="text-[#1C1C1E] font-bold">{userProfile.name || 'Authorized User'} (L4)</span>
                   </div>
                 </div>
               </div>

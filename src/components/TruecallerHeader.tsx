@@ -7,6 +7,7 @@ interface TruecallerHeaderProps {
   onOpenUserProfile: () => void;
   isSyncing?: boolean;
   onSync?: () => void;
+  userInitials?: string;
 }
 
 export const TruecallerHeader: React.FC<TruecallerHeaderProps> = ({
@@ -15,6 +16,7 @@ export const TruecallerHeader: React.FC<TruecallerHeaderProps> = ({
   onOpenUserProfile,
   isSyncing = false,
   onSync,
+  userInitials = 'U',
 }) => {
   return (
     <header className="px-4 py-3 bg-white border-b border-slate-100 shrink-0 z-20">
@@ -58,9 +60,9 @@ export const TruecallerHeader: React.FC<TruecallerHeaderProps> = ({
         <button
           onClick={onOpenUserProfile}
           className="w-10 h-10 rounded-full bg-[#0087FF] text-white font-bold text-xs flex items-center justify-center shadow-sm hover:ring-2 hover:ring-[#0087FF]/40 transition shrink-0 active:scale-95"
-          title="Network Forensics by Dwaipayan"
+          title="User Profile & Identity"
         >
-          DC
+          {userInitials}
         </button>
       </div>
     </header>
