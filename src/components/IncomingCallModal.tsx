@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ManualOverride } from '../types';
 import { LocalSqliteStorage } from '../lib/storage';
+import { DeviceService } from '../lib/deviceService';
 
 interface IncomingCallModalProps {
   number: string;
@@ -47,6 +48,9 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
     return () => clearInterval(timer);
   }, [callState]);
 
+  const telemetry = DeviceService.getRealHardwareTelemetry();
+  const activeSimLabel = telemetry.activeSimSlot || 'SIM 1 (Active)';
+
   const handleAccept = () => {
     setCallState('connected');
   };
@@ -60,7 +64,7 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
       timestamp: Date.now(),
       duration: 0,
       type: 'rejected',
-      sim: 'SIM 1 (Jio)',
+      sim: activeSimLabel,
     });
     onCallLogged();
     setTimeout(onClose, 800);
@@ -75,7 +79,7 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
       timestamp: Date.now() - duration * 1000,
       duration,
       type: 'incoming',
-      sim: 'SIM 1 (Jio)',
+      sim: activeSimLabel,
     });
     onCallLogged();
     setTimeout(onClose, 800);
@@ -164,8 +168,8 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
           </div>
         )}
 
-        <div className="text-[11px] text-slate-400 mt-2">
-          Carrier: Jio 5G · United States
+        <div className="text-[11px] text-slate-400 mt-2 font-mono">
+          {telemetry.carrierName ? `Carrier: ${telemetry.carrierName}` : 'Cellular Network'}
         </div>
       </div>
 

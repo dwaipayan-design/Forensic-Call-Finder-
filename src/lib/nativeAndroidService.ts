@@ -6,6 +6,7 @@ export interface PermissionStatus {
   callLog: 'granted' | 'denied' | 'prompt';
   writeCallLog?: 'granted' | 'denied' | 'prompt';
   phoneState?: 'granted' | 'denied' | 'prompt';
+  location?: 'granted' | 'denied' | 'prompt';
 }
 
 export interface SyncResult {
@@ -20,18 +21,62 @@ export interface RealHardwareTelemetryData {
   deviceId: string;
   hardwareModel: string;
   androidBuild: string;
+  simCarrierName?: string;
+  simOperator?: string;
+  registeredCarrierName?: string;
+  registeredOperator?: string;
   carrierName: string;
   telephonyState: string;
   activeSimSlot: string;
   simSerial: string;
   binderInterface: string;
+  isRoaming?: boolean;
+  dataNetworkType?: string;
+  dataState?: string;
+  simState?: string;
   simSubscriptions?: Array<{
     slotIndex: number;
+    subscriptionId?: number;
     carrier: string;
+    displayName?: string;
     countryIso?: string;
-    mcc?: number;
-    mnc?: number;
+    mcc?: string | number;
+    mnc?: string | number;
+    isEmbedded?: boolean;
   }>;
+}
+
+export interface RealCellSignalTelemetry {
+  hasRealTelemetry: boolean;
+  source: 'android_telephony_api' | 'web_browser_unsupported';
+  locationPermissionGranted?: boolean;
+  cellInfoStatus?: string;
+  error?: string;
+  overallLevel?: number; // 0-4
+  overallDbm?: number;
+  lteRsrp?: number;
+  lteRsrq?: number;
+  lteRssnr?: number;
+  lteCqi?: number;
+  lteTimingAdvance?: number;
+  nrSsRsrp?: number;
+  nrSsRsrq?: number;
+  nrSsSinr?: number;
+  nrCsiRsrp?: number;
+  nrCsiRsrq?: number;
+  nrCsiSinr?: number;
+  gsmRssi?: number;
+  rat?: string;
+  pci?: number;
+  tac?: number;
+  cellId?: string;
+  arfcn?: number;
+  bandwidth?: number;
+  mcc?: string;
+  mnc?: string;
+  ageMs?: number;
+  isCached?: boolean;
+  isRegistered?: boolean;
 }
 
 // Generate consistent avatar colors for contacts
@@ -98,6 +143,7 @@ export class NativeAndroidService {
           callLog: parsed.callLog ? 'granted' : 'denied',
           writeCallLog: parsed.writeCallLog ? 'granted' : 'denied',
           phoneState: parsed.phoneState ? 'granted' : 'denied',
+          location: parsed.location ? 'granted' : 'denied',
         };
       } catch (e) {
         console.warn('Bridge checkPermissions error:', e);
@@ -151,6 +197,8 @@ export class NativeAndroidService {
     const status: PermissionStatus = {
       contacts: 'granted',
       callLog: 'granted',
+      phoneState: 'granted',
+      location: 'granted',
     };
     localStorage.setItem('android_permissions_state', JSON.stringify(status));
     return status;
@@ -189,6 +237,31 @@ export class NativeAndroidService {
       }
     }
     return null;
+  }
+
+  /**
+   * Fetch genuine cellular cell identifiers and signal strength from Android TelephonyManager
+   */
+  static getCellAndSignalTelemetry(): RealCellSignalTelemetry {
+    const bridge = (window as any).AndroidBridge || (window as any).AndroidNative;
+    if (bridge && typeof bridge.getCellAndSignalTelemetry === 'function') {
+      try {
+        const raw = bridge.getCellAndSignalTelemetry();
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (parsed && typeof parsed === 'object') {
+          return parsed as RealCellSignalTelemetry;
+        }
+      } catch (e) {
+        console.error('Failed querying cell & signal telemetry from bridge:', e);
+      }
+    }
+
+    // Honest web browser preview fallback — clearly indicates unexposed hardware
+    return {
+      hasRealTelemetry: false,
+      source: 'web_browser_unsupported',
+      cellInfoStatus: 'TelephonyManager is only available on native Android devices',
+    };
   }
 
   /**

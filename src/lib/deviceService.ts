@@ -10,9 +10,28 @@ export interface DeviceHardwareTelemetry {
   androidBuild: string;
   activeSimSlot: string;
   carrierName: string;
+  simCarrierName?: string;
+  simOperator?: string;
+  registeredCarrierName?: string;
+  registeredOperator?: string;
+  dataNetworkType?: string;
+  dataState?: string;
+  isRoaming?: boolean;
+  simState?: string;
   telephonyState: string;
   simSerial: string;
   binderInterface: string;
+  isNative?: boolean;
+  simSubscriptions?: Array<{
+    slotIndex: number;
+    subscriptionId?: number;
+    carrier: string;
+    displayName?: string;
+    countryIso?: string;
+    mcc?: string | number;
+    mnc?: string | number;
+    isEmbedded?: boolean;
+  }>;
 }
 
 export class DeviceService {
@@ -30,9 +49,19 @@ export class DeviceService {
         androidBuild: nativeData.androidBuild,
         activeSimSlot: nativeData.activeSimSlot,
         carrierName: nativeData.carrierName,
+        simCarrierName: nativeData.simCarrierName,
+        simOperator: nativeData.simOperator,
+        registeredCarrierName: nativeData.registeredCarrierName,
+        registeredOperator: nativeData.registeredOperator,
+        dataNetworkType: nativeData.dataNetworkType,
+        dataState: nativeData.dataState,
+        isRoaming: nativeData.isRoaming,
+        simState: nativeData.simState,
         telephonyState: nativeData.telephonyState,
         simSerial: nativeData.simSerial,
         binderInterface: nativeData.binderInterface,
+        isNative: true,
+        simSubscriptions: nativeData.simSubscriptions,
       };
       try {
         localStorage.setItem(DEVICE_HARDWARE_KEY, JSON.stringify(realTelemetry));

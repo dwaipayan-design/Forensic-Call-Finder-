@@ -151,7 +151,7 @@ export const SQLiteInspector: React.FC<SQLiteInspectorProps> = ({
                 required
                 value={newNumber}
                 onChange={(e) => setNewNumber(e.target.value)}
-                placeholder="+1 555 0192"
+                placeholder="+1 415 234 5678"
                 className="w-full h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
               />
             </div>

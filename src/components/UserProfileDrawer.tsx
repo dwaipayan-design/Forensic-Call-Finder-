@@ -261,7 +261,7 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
             </div>
           </div>
           <span className="text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200/60">
-            HAL ACTIVE
+            {telemetry.isNative ? 'ANDROID APK' : 'WEB CLIENT'}
           </span>
         </div>
 
@@ -275,8 +275,8 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
               </span>
             </div>
             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Real Device Hook
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              {telemetry.isNative ? 'Native Telephony API' : 'Device Telemetry'}
             </span>
           </div>
 
