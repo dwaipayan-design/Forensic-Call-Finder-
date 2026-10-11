@@ -26,12 +26,14 @@ interface UserProfileDrawerProps {
   onClose: () => void;
   onOpenAddLog: () => void;
   onRefreshData: () => void;
+  onReplaySplash?: () => void;
 }
 
 export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
   onClose,
   onOpenAddLog,
   onRefreshData,
+  onReplaySplash,
 }) => {
   const [profile, setProfile] = useState<UserProfile>(DeviceService.getUserProfile());
   const [telemetry, setTelemetry] = useState<DeviceHardwareTelemetry>(DeviceService.getRealHardwareTelemetry());
@@ -46,7 +48,10 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const [pinError, setPinError] = useState(false);
+  // Feature locked/hidden state: if wrong PIN is entered, silently hide the entire section until app restart
+  const [isFeatureLockedOut, setIsFeatureLockedOut] = useState(() => {
+    return sessionStorage.getItem('adv_device_ctrl_locked') === 'true';
+  });
 
   useEffect(() => {
     const p = DeviceService.getUserProfile();
@@ -73,9 +78,11 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
     e.preventDefault();
     if (pinInput.trim() === '3329') {
       setIsUnlocked(true);
-      setPinError(false);
     } else {
-      setPinError(true);
+      // If someone puts wrong password: don't tell real password, lock feature until app restart, make tab disappear silently
+      setIsFeatureLockedOut(true);
+      sessionStorage.setItem('adv_device_ctrl_locked', 'true');
+      setShowPinPrompt(false);
       setPinInput('');
     }
   };
@@ -237,6 +244,27 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
           </form>
         )}
 
+        {/* APP ICON & SYSTEM SPLASH SCREEN PREVIEW */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl overflow-hidden shadow-sm border border-slate-100 shrink-0 bg-blue-600">
+              <img src="/icon.svg" alt="App Icon" className="w-full h-full object-cover" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-800">Forensic Call Finder</div>
+              <div className="text-[11px] text-slate-500">Official App Icon & Boot Splash</div>
+            </div>
+          </div>
+          {onReplaySplash && (
+            <button
+              onClick={onReplaySplash}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition active:scale-95 cursor-pointer"
+            >
+              Replay Splash
+            </button>
+          )}
+        </div>
+
         {/* DEVICE HARDWARE TELEMETRY SECTION (Real data detected from device, not guessed) */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -297,79 +325,71 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
           </div>
         </div>
 
-        {/* MORE DETAILS SECTION (Locked behind passcode 3329) */}
-        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4">
-          {!showPinPrompt ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-slate-800 block">Advanced Device Controls</span>
-                <span className="text-[11px] text-slate-500">Security-gated manual logging diagnostics</span>
-              </div>
-              <button
-                onClick={() => setShowPinPrompt(true)}
-                className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:border-[#0087FF] hover:text-[#0087FF] transition flex items-center gap-1.5 shadow-xs"
-              >
-                <Lock className="w-3.5 h-3.5 text-slate-500" />
-                ( More Details )
-              </button>
-            </div>
-          ) : !isUnlocked ? (
-            <form onSubmit={handleUnlockPin} className="space-y-3 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
-                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <KeyRound className="w-3.5 h-3.5 text-[#0087FF]" />
-                  Enter Passcode for More Details
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPinPrompt(false);
-                    setPinError(false);
-                    setPinInput('');
-                  }}
-                  className="text-xs text-slate-400 hover:text-slate-600"
-                >
-                  Close
-                </button>
-              </div>
-
-              <input
-                type="password"
-                maxLength={6}
-                autoFocus
-                value={pinInput}
-                onChange={(e) => {
-                  setPinInput(e.target.value);
-                  setPinError(false);
-                }}
-                placeholder="Enter PIN (3329)"
-                className="w-full h-10 px-3 text-center tracking-widest font-mono text-sm rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#0087FF]/40"
-              />
-
-              {pinError && (
-                <div className="text-[11px] text-rose-600 font-semibold flex items-center justify-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  Passcode incorrect. Enter 3329.
+        {/* MORE DETAILS SECTION (Locked behind passcode 3329 - disappears silently if wrong password entered) */}
+        {!isFeatureLockedOut && (
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4">
+            {!showPinPrompt ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">Advanced Device Controls</span>
+                  <span className="text-[11px] text-slate-500">Security-gated manual logging diagnostics</span>
                 </div>
-              )}
-
-              <div className="flex items-center gap-2">
                 <button
-                  type="button"
-                  onClick={() => setShowPinPrompt(false)}
-                  className="flex-1 h-9 rounded-xl bg-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-300 transition"
+                  onClick={() => setShowPinPrompt(true)}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:border-[#0087FF] hover:text-[#0087FF] transition flex items-center gap-1.5 shadow-xs"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 h-9 rounded-xl bg-[#0087FF] text-white text-xs font-semibold hover:bg-[#0073D9] transition"
-                >
-                  Unlock Diagnostics
+                  <Lock className="w-3.5 h-3.5 text-slate-500" />
+                  ( More Details )
                 </button>
               </div>
-            </form>
-          ) : (
+            ) : !isUnlocked ? (
+              <form onSubmit={handleUnlockPin} className="space-y-3 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-[#0087FF]" />
+                    Enter Passcode for More Details
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPinPrompt(false);
+                      setPinInput('');
+                    }}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <input
+                  type="password"
+                  maxLength={6}
+                  autoFocus
+                  value={pinInput}
+                  onChange={(e) => {
+                    setPinInput(e.target.value);
+                  }}
+                  placeholder="Enter Passcode"
+                  className="w-full h-10 px-3 text-center tracking-widest font-mono text-sm rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#0087FF]/40"
+                />
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPinPrompt(false)}
+                    className="flex-1 h-9 rounded-xl bg-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-300 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 h-9 rounded-xl bg-[#0087FF] text-white text-xs font-semibold hover:bg-[#0073D9] transition"
+                  >
+                    Unlock Diagnostics
+                  </button>
+                </div>
+              </form>
+            ) : (
             <div className="space-y-3 animate-in fade-in duration-200 text-left">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
@@ -408,6 +428,7 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

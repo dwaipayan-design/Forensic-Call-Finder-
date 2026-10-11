@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Forensic Network Call Finder",
+  "short_name": "CallFinder",
+  "description": "Telecommunications & Signal Analysis Workstation by Dwaipayan Chakraborty. Project supported by Research Wing Division.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F2F2F7",
+  "theme_color": "#007AFF",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

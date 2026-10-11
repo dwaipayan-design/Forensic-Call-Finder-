@@ -70,16 +70,17 @@ export class LocalSqliteStorage {
   // Load shadow settings map from local storage (simulating sqflite table 'settings')
   static getSettingsMap(): Record<string, ManualOverride> {
     try {
+      this.purgeLegacyMockData();
       this.checkAndExpireBusyStatuses();
       const data = localStorage.getItem(SETTINGS_KEY);
       if (!data) {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(INITIAL_OVERWRITES));
-        return { ...INITIAL_OVERWRITES };
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({}));
+        return {};
       }
       return JSON.parse(data);
     } catch (e) {
       console.error('Failed reading SQLite shadow settings', e);
-      return { ...INITIAL_OVERWRITES };
+      return {};
     }
   }
 
@@ -353,26 +354,77 @@ export class LocalSqliteStorage {
     this.notify();
   }
 
-  // Reset database back to default state
+  // Purge any residual or legacy mock data so device storage remains authentic
+  static purgeLegacyMockData(): void {
+    try {
+      const logsRaw = localStorage.getItem(LOGS_KEY);
+      if (logsRaw) {
+        const logs: CallLogEntry[] = JSON.parse(logsRaw);
+        const filteredLogs = logs.filter(
+          (l) => !l.id?.startsWith('log-') && !l.number?.includes('555 0192') && !l.number?.includes('555 8391')
+        );
+        if (filteredLogs.length !== logs.length) {
+          localStorage.setItem(LOGS_KEY, JSON.stringify(filteredLogs));
+        }
+      }
+
+      const contactsRaw = localStorage.getItem(CONTACTS_KEY);
+      if (contactsRaw) {
+        const contacts: ContactItem[] = JSON.parse(contactsRaw);
+        const filteredContacts = contacts.filter(
+          (c) => !c.id?.startsWith('c-') && !c.number?.includes('555 0192') && !c.number?.includes('555 8391')
+        );
+        if (filteredContacts.length !== contacts.length) {
+          localStorage.setItem(CONTACTS_KEY, JSON.stringify(filteredContacts));
+        }
+      }
+
+      const settingsRaw = localStorage.getItem(SETTINGS_KEY);
+      if (settingsRaw) {
+        const settings = JSON.parse(settingsRaw);
+        let changed = false;
+        ['+1 415 555 0192', '+1 212 555 8391', '+1 312 555 4402', '+1 800 555 9922'].forEach((num) => {
+          if (settings[num]) {
+            delete settings[num];
+            changed = true;
+          }
+        });
+        if (changed) {
+          localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        }
+      }
+    } catch (e) {
+      console.warn('Error purging legacy mock data', e);
+    }
+  }
+
+  // Reset database back to default empty state
   static resetDatabase(): void {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(INITIAL_OVERWRITES));
-    localStorage.setItem(LOGS_KEY, JSON.stringify(INITIAL_CALL_LOGS));
-    localStorage.setItem(CONTACTS_KEY, JSON.stringify(INITIAL_CONTACTS));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({}));
+    localStorage.setItem(LOGS_KEY, JSON.stringify([]));
+    localStorage.setItem(CONTACTS_KEY, JSON.stringify([]));
+    this.notify();
+  }
+
+  // Set real synchronized device contacts
+  static setContacts(contacts: ContactItem[]): void {
+    localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
     this.notify();
   }
 
   // Get device contacts (persisted in local device storage)
   static getContacts(): ContactItem[] {
     try {
+      this.purgeLegacyMockData();
       const data = localStorage.getItem(CONTACTS_KEY);
       if (!data) {
-        localStorage.setItem(CONTACTS_KEY, JSON.stringify(INITIAL_CONTACTS));
-        return [...INITIAL_CONTACTS];
+        localStorage.setItem(CONTACTS_KEY, JSON.stringify([]));
+        return [];
       }
       return JSON.parse(data);
     } catch (e) {
       console.error('Failed reading device contacts', e);
-      return [...INITIAL_CONTACTS];
+      return [];
     }
   }
 
@@ -545,18 +597,32 @@ export class LocalSqliteStorage {
     this.notify();
   }
 
-  // Get call logs (simulating call_log package)
+  // Set real synchronized device call logs
+  static setCallLogs(logs: CallLogEntry[]): void {
+    localStorage.setItem(LOGS_KEY, JSON.stringify(logs));
+    this.notify();
+  }
+
+  // Synchronize both device contacts and call logs
+  static syncDeviceData(contacts: ContactItem[], logs: CallLogEntry[]): void {
+    localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
+    localStorage.setItem(LOGS_KEY, JSON.stringify(logs));
+    this.notify();
+  }
+
+  // Get call logs (retrieves real device logs or empty list)
   static getCallLogs(): CallLogEntry[] {
     try {
+      this.purgeLegacyMockData();
       const data = localStorage.getItem(LOGS_KEY);
       if (!data) {
-        localStorage.setItem(LOGS_KEY, JSON.stringify(INITIAL_CALL_LOGS));
-        return [...INITIAL_CALL_LOGS];
+        localStorage.setItem(LOGS_KEY, JSON.stringify([]));
+        return [];
       }
       return JSON.parse(data);
     } catch (e) {
       console.error('Failed reading call logs', e);
-      return [...INITIAL_CALL_LOGS];
+      return [];
     }
   }
 

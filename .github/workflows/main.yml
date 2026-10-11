@@ -41,8 +41,10 @@ jobs:
 
       - name: Configure Android project
         run: |
-          npx cap add android
+          npx cap add android || true
+          node scripts/android-configure.cjs
           npx cap sync android
+          node scripts/android-configure.cjs
 
       - name: Build APK
         run: |

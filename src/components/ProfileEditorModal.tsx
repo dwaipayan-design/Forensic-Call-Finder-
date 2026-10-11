@@ -734,12 +734,14 @@ export const ProfileEditorModal: React.FC<ProfileEditorModalProps> = ({
               <span className="text-xs font-medium">Message</span>
             </a>
 
-            {/* Block / Unblock Button (Real block button already here) */}
+            {/* Block Button (Pure UI button: toggles visual state only, does nothing else) */}
             <button
-              onClick={handleToggleBlock}
+              onClick={() => setIsBlocked((prev) => !prev)}
               className={`flex flex-col items-center gap-1 transition ${
                 isBlocked ? 'text-[#EB3349]' : 'text-slate-700 hover:text-[#EB3349]'
               }`}
+              type="button"
+              title={isBlocked ? 'Unblock' : 'Block'}
             >
               <div
                 className={`w-11 h-11 rounded-full flex items-center justify-center shadow-xs transition ${
@@ -880,30 +882,30 @@ export const ProfileEditorModal: React.FC<ProfileEditorModalProps> = ({
                 </button>
               </div>
 
-              {/* 2. Dual-Mode Caller Selection (Requirement 2: Device Contact vs Custom Entry) */}
+              {/* 2. Dual-Mode Caller Selection (Device Contact vs Custom Entry) */}
               {isBusy && (
-                <div className="p-3.5 bg-red-50/60 rounded-2xl border border-red-100 space-y-3">
+                <div className="p-3.5 bg-slate-50/80 rounded-2xl space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold text-slate-800">
+                    <label className="block text-xs font-bold text-[#1C1C1E]">
                       In a call with
                     </label>
-                    <span className="text-[10px] font-mono font-medium text-slate-500">
+                    <span className="text-[10px] font-mono font-medium text-[#8E8E93]">
                       {callerMode === 'contact' ? 'Linked Profile' : 'Custom / Unlinked'}
                     </span>
                   </div>
 
                   {/* Dual Mode Switcher Tabs */}
-                  <div className="flex rounded-xl bg-red-100/70 p-1 text-xs font-semibold gap-1">
+                  <div className="flex rounded-xl bg-slate-200/70 p-1 text-xs font-semibold gap-1">
                     <button
                       type="button"
                       onClick={() => setCallerMode('contact')}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                         callerMode === 'contact'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                          ? 'bg-white text-[#1C1C1E] shadow-xs'
+                          : 'text-[#8E8E93] hover:text-[#1C1C1E]'
                       }`}
                     >
-                      <Users className="w-3.5 h-3.5 text-[#0087FF]" />
+                      <Users className="w-3.5 h-3.5 text-[#007AFF]" />
                       <span>Device Contact</span>
                     </button>
                     <button
@@ -911,8 +913,8 @@ export const ProfileEditorModal: React.FC<ProfileEditorModalProps> = ({
                       onClick={() => setCallerMode('custom')}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                         callerMode === 'custom'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                          ? 'bg-white text-[#1C1C1E] shadow-xs'
+                          : 'text-[#8E8E93] hover:text-[#1C1C1E]'
                       }`}
                     >
                       <Edit3 className="w-3.5 h-3.5 text-[#EB3349]" />
@@ -924,16 +926,16 @@ export const ProfileEditorModal: React.FC<ProfileEditorModalProps> = ({
                   {callerMode === 'contact' && (
                     <div className="space-y-2">
                       {talkingTo && !isCustomCaller ? (
-                        <div className="flex items-center justify-between p-2.5 bg-white border border-red-200 rounded-xl shadow-xs">
+                        <div className="flex items-center justify-between p-2.5 bg-white rounded-xl shadow-xs">
                           <div className="flex items-center gap-2 min-w-0">
-                            <div className="w-8 h-8 rounded-full bg-[#0087FF] text-white font-bold text-xs flex items-center justify-center shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-[#007AFF] text-white font-bold text-xs flex items-center justify-center shrink-0">
                               {(talkingTo[0] || '?').toUpperCase()}
                             </div>
                             <div className="min-w-0 truncate">
-                              <div className="font-bold text-xs text-slate-900 truncate">
+                              <div className="font-bold text-xs text-[#1C1C1E] truncate">
                                 {talkingTo}
                               </div>
-                              <div className="text-[10.5px] font-mono text-slate-500 truncate">
+                              <div className="text-[10.5px] font-mono text-[#8E8E93] truncate">
                                 {talkingToNumber || 'Device Contact'}
                               </div>
                             </div>
@@ -943,7 +945,7 @@ export const ProfileEditorModal: React.FC<ProfileEditorModalProps> = ({
                             <button
                               type="button"
                               onClick={() => setShowContactPicker(true)}
-                              className="px-2.5 py-1 text-[11px] font-semibold text-[#0087FF] bg-blue-50 hover:bg-blue-100 rounded-lg transition"
+                              className="px-2.5 py-1 text-[11px] font-semibold text-[#007AFF] bg-blue-50 hover:bg-blue-100 rounded-lg transition"
                             >
                               Change
                             </button>
@@ -965,13 +967,13 @@ export const ProfileEditorModal: React.FC<ProfileEditorModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setShowContactPicker(true)}
-                          className="w-full h-11 px-3 bg-white border-2 border-dashed border-red-300 hover:border-[#EB3349] rounded-xl text-xs font-bold text-[#EB3349] hover:bg-red-50/50 flex items-center justify-center gap-2 transition cursor-pointer"
+                          className="w-full h-11 px-3 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold text-[#007AFF] flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
                         >
-                          <Users className="w-4 h-4" />
+                          <Users className="w-4 h-4 text-[#007AFF]" />
                           <span>Select from Device Contacts...</span>
                         </button>
                       )}
-                      <p className="text-[10.5px] text-slate-500 leading-tight">
+                      <p className="text-[10.5px] text-[#8E8E93] leading-tight">
                         Option A: Creates an interconnected, clickable profile link with two-way status sync.
                       </p>
                     </div>
@@ -979,7 +981,7 @@ export const ProfileEditorModal: React.FC<ProfileEditorModalProps> = ({
 
                   {/* Option B: Custom Entry (Fake Name & Fake Number) */}
                   {callerMode === 'custom' && (
-                    <div className="space-y-2.5 bg-white p-3 rounded-xl border border-red-200/80">
+                    <div className="space-y-2.5 bg-white p-3 rounded-xl shadow-xs">
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">
                           Fake Name <span className="text-rose-500">*</span>
@@ -988,8 +990,8 @@ export const ProfileEditorModal: React.FC<ProfileEditorModalProps> = ({
                           type="text"
                           value={fakeName}
                           onChange={(e) => setFakeName(e.target.value)}
-                          placeholder="e.g. Boss, Mom, FBI Headquarters, Dr. Vance"
-                          className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-400/30 focus:border-[#EB3349]"
+                          placeholder="e.g. Boss, Mom, Dr. Vance"
+                          className="w-full h-9 px-3 bg-slate-50 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30"
                         />
                       </div>
 
@@ -1002,17 +1004,17 @@ export const ProfileEditorModal: React.FC<ProfileEditorModalProps> = ({
                           value={fakeNumber}
                           onChange={(e) => setFakeNumber(e.target.value)}
                           placeholder="e.g. +1 800 555 0199"
-                          className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-400/30 focus:border-[#EB3349]"
+                          className="w-full h-9 px-3 bg-slate-50 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#007AFF]/30"
                         />
                       </div>
 
-                      <p className="text-[10.5px] text-slate-500 leading-tight">
+                      <p className="text-[10.5px] text-[#8E8E93] leading-tight">
                         Option B: Displays in call logs as "In a call with {fakeName || '[Fake Name]'}". Will <strong>NOT</strong> be clickable and will not attempt to link to a device profile.
                       </p>
                     </div>
                   )}
 
-                  <div className="text-[10.5px] text-slate-500 leading-tight pt-0.5 border-t border-red-100">
+                  <div className="text-[10.5px] text-[#8E8E93] leading-tight pt-1">
                     ⏱ Auto-expires in <strong>5 to 15 minutes</strong> via background TTL timer.
                   </div>
                 </div>
